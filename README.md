@@ -19,7 +19,8 @@ I started writing this quite a few years ago, and since then, several other simi
 
 # Getting started
 ## Dependencies
-The library was developed on Windows 10. It does use Windows APIs for pop-up message boxes, but could probably be converted to other platforms without much difficulty.
+The library was developed on Windows 10. It does use Windows APIs for pop-up message boxes in `measurement.wait.For_Click`, but could probably be converted to other platforms without much difficulty (or just delete the offending class).
+
 You will need the following dependencies:
 * Python Modules (all available through pip)
   * numpy
@@ -27,7 +28,7 @@ You will need the following dependencies:
   * pyvisa
   * parse
 * Other libraries
-  * [NI-VISA](https://www.ni.com/en-gb/support/downloads/drivers/download.ni-visa.html) (Note this is not free software. pyvisa-py will probably work instead, but isn't tested)
+  * A VISA implementation. VISA is a standard API for working with instruments, and many instrument manufacturers have their own implementations of it. They have different licencing rules, some are only free if you own hardware from that vendor. We use [NI-VISA](https://www.ni.com/en-gb/support/downloads/drivers/download.ni-visa.html) and have also tested with [R&S VISA](https://www.rohde-schwarz.com/uk/applications/r-s-visa-application-note_56280-148812.html), but any VISA should work. 
   * [KST](https://kst-plot.kde.org/) (optional, for realtime plotting)
   * Micro Epsilon MEDAQLib (optional, for connecting to their instruments)
 
@@ -55,7 +56,7 @@ You can then define a `Quantity`. A `Quantity` defines something you want to con
 from measurement import Quantity
 from measurement.recorders import Recorder
 cap = Quantity(['Capacitance', 'loss'], (bridge, 'meas'), ['pF','GOhm'])
-rec = Recorder('filename', [v1, v2, cap, pos], plot_kst=True)
+rec = Recorder('filename', [cap], plot_kst=True)
 rec.record_line()
 # do something
 rec.record_line()
