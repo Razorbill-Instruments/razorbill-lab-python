@@ -1,7 +1,7 @@
 # razorbill-lab-python
 This library is a collection of modules we use in the Razorbill Instruments labs for QA and R&D. It is designed as a small, simple, easy to extend interface for various scientific instruments. It also includes features for gathering data and (through KST) plotting it in real time and some functionality designed to make experiment scripts easy to write. We have decided to make it publically available as people often ask about it, but it is not a product or part of any of our products, and doesn't come with any support. It is made available under the MIT licence - see the LICENCE file for details.
 
-I started writing this quite a few years ago, and since then, several other similar projects have appeared, and many are now much more feature-rich. These include QCoDeS, PyMeasure easy-scpi and probably others. Consider checking those out too.
+I started writing this quite a few years ago, and since then, several other similar projects have appeared, and many are now much more feature-rich. These include QCoDeS, InstrumentKit, PyMeasure, easy-scpi and probably others. Consider checking those out too.
 
 ## Features
 * Most SCPI-like instruments can be supported by writing simple python classes - most SCPI commands only need one line of python code.
