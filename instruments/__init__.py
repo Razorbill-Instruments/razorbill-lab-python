@@ -102,10 +102,14 @@ class Instrument(metaclass=_Multiton):
     def _check_idn(self):
         """Query the instrument *IDN? and check it is as expected"""
         resp = self.raw_query('*IDN?')
-        if not resp.startswith(self._idnstring):
-            raise WrongInstrumentError(
+        if not isinstance(self._idnstring, list):
+            self._idnstring = [self._idnstring]
+        for idn in self._idnstring:
+            if resp.startswith(idn):
+                return
+        raise WrongInstrumentError(
                 """Wrote "*IDN?" Expected response starting
-                   '{}' got '{}'""".format(self._idnstring, resp))
+                '{}' got '{}'""".format(self._idnstring[0], resp))
 
     def _config(self):
         """override this method to configure the instrument after the

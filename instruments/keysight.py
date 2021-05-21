@@ -12,7 +12,7 @@ from . import ScpiInstrument, _scpi_property
 class E4980A(ScpiInstrument):
     """ Keysight E4980[A|AL] LCR meter"""
     
-    _idnstring = "Keysight Technologies,E4980"
+    _idnstring = ["Keysight Technologies,E4980", "Agilent Technologies,E4980"]
     
     meas = _scpi_property('FETCH', '{:g},{:g},+0', doc="cap and loss", 
                           can_set=False)
