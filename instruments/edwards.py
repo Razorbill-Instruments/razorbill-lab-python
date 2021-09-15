@@ -60,7 +60,7 @@ class nAPG(Instrument):
         super().__init__(visa_name)
         
     _idnstring = "=S0 nAPG-LC_RS232;"
-    normal_status = "0010"     
+    normal_status = "0014" # may be 0014 or 0010 depending on set point output
         
     def _setup(self):
         """ Configure serial """
@@ -101,7 +101,7 @@ class nAPG(Instrument):
         resp = resp[1].split(';')
         if self.quiet == False:
             if resp[1] != self.normal_status:
-                raise self.AbnormalResponse("""The guage status bits were '{}' 
+                raise AbnormalResponse("""The guage status bits were '{}' 
                        when '{}' is normal. Consult the gauge manual for more 
                        information""".format(resp[2], self.normal_status))
         return float(resp[0])
@@ -245,9 +245,8 @@ class nAIM_P():
     (probaby the CTC100)
     """
     
-    def __init__(self,quantity):
-        self.quantity
-        super.__init__()
+    def __init__(self, quantity):
+        self.quantity = quantity
     
     #table format is [volts,mbar]
     caltable = np.array([[2,   1e-8  ],
@@ -293,6 +292,7 @@ class nAIM_P():
     #this is a callable!
     interpolator = interp1d(caltable[:,0], caltable[:,1], kind='cubic')
     
+    @property
     def pressure(self):
         voltage = self.quantity.value
         if (-0.1 < voltage < 2): return 1000
