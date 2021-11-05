@@ -1,4 +1,4 @@
-# 
+#
 # Copyright 2016-2021 Razorbill Instruments Ltd.
 # This file is part of the Razorbill Lab Python library which is
 # available under the MIT licence - see the LICENCE file for more.
@@ -100,6 +100,59 @@ class In_Band(_Wait):
         return self.stable_count > self.target_count
 
 
+class Is_Equal(_Wait):
+    def __init__(self, quantity, target, target_time, period=1,
+                 quantity_index=0, timeout=numpy.inf):
+        """
+        Blocks until `quantity` is equal to target for `target_time`
+
+        This is used to delay an experiment until some measurement quantity
+        is a certain value. For example, for a state flag to change.  For 
+        continuous variables use In_Band instead.
+
+        Construction
+        ------------
+        quantity : a measurement.Quantity
+            The wait will end or not depending on the value of this quantity
+
+        target : number
+            the target for the quantity to reach. Can be an IntEnum.
+
+        target_time : number
+            contiguous time quantity must be in band, in seconds
+
+        period : number
+            how often to check the Quantity, in seconds (default is 1)
+
+        quantity_index : integer
+            If quantity is a list Quantity, watch this item
+
+        timeout : integer
+            If set, the function will timeout if it is still not in band after
+            this many seconds
+        """
+        super().__init__(period, timeout)
+        _logger.info(f"Waiting for {quantity.name} to be {target} for {target_time}s...")
+        self.target_count = target_time / period
+        self.stable_count = 0
+        self.quantity = quantity
+        self.quantity_index = quantity_index
+        self.target = target
+        self.run()
+        _logger.info(f"Done waiting for {quantity.name}")
+
+    def test(self):
+        if type(self.quantity.name) is list:
+            meas = self.quantity.value[self.quantity_index]
+        else:
+            meas = self.quantity.value
+        if meas == self.target:
+            self.stable_count += 1
+        else:
+            self.stable_count = 0
+        return self.stable_count > self.target_count
+
+
 class Is_Stable(_Wait):
     def __init__(self, quantity, variation, test_time, period=1,
                  quantity_index=0, timeout=numpy.inf):
@@ -167,15 +220,20 @@ class For_Seconds(_Wait):
 
 
 class For_Click(_Wait):
-    def __init__(self, msg=None, title="Script Waiting", period=1, timeout=numpy.inf):
+    def __init__(self, msg='', title="Script Waiting", period=1, timeout=numpy.inf):
         """Pops up a message box and waits until it is dismissed."""
         super().__init__(period, timeout)
         thread_name = threading.current_thread().name
         msg = msg + f"\n\nThread '{thread_name}' is paused.\n"
         msg = msg + "Press 'OK' to continue."
         _logger.debug("Waiting for message box click...")
-        self.popup_thread = threading.Thread(target=ctypes.windll.user32.MessageBoxW,
-                                             args=(0, msg, title, 0x1040), name="Wait For Click")
+
+        def thread_target():
+            resp = 0
+            while resp != 1:
+                resp = ctypes.windll.user32.MessageBoxW(0, msg, title, 0x10141)
+
+        self.popup_thread = threading.Thread(target=thread_target, name="Wait For Click")
         self.popup_thread.start()
         self.run()
         _logger.debug("...done waiting")
