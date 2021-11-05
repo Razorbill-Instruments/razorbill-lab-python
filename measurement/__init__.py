@@ -1,70 +1,39 @@
+#
+# Copyright 2016-2021 Razorbill Instruments Ltd.
+# This file is part of the Razorbill Lab Python library which is
+# available under the MIT licence - see the LICENCE file for more.
+#
 """ Module for measuring things, and writing the results to file.
 
 Designed to work well with the instruments module. Normal usage is to create
 a Quantity for everything you want to measure and then start a Recorder to
-measure to file
+measure to file.
 """
 
-import logging
-import sys
 import numpy as np
-import time
 import __main__
-try:
-    import IPython
-    have_ipython = True
-except ModuleNotFoundError:
-    have_ipython = False
+from ._logging import _setup_logging, _setup_exception_logging, _rootlogger
+from ._logging import ThreadWithExcLog  # NOQA for export
+from .config import data_path, log_path, kst_binary  # NOQA for export
 
-_logger = logging.getLogger('measurement_system')
 _environment_is_setup = False
+logger = _rootlogger.getChild('user')  # for use in scripts. Use _logger within module
+_logger = _rootlogger.getChild('measurement')
 
 
-def setup_environment():
-    """
-    Call this at the start of an experiment script/session to set up logging.
-
-    Parameters
-    ----------
-    None.
-
-    Returns
-    -------
-    None.
-
-    """
+def setup_environment(log_path=log_path):
+    """Call this at the start of an experiment to set up logging."""
     global _environment_is_setup
     if not _environment_is_setup:
-        log_formatter = logging.Formatter(
-            '%(asctime)s [%(levelname)s] %(threadName)s > %(message)s',
-            datefmt="%Y-%m-%d %H:%M:%S")
-        root_logger = logging.getLogger('measurement_system')
-        filename = "measurement log {}.log".format(time.strftime("%Y-%m-%d %H-%M-%S"))
-        file_handler = logging.FileHandler(filename)
-        file_handler.setLevel(logging.DEBUG)
-        file_handler.setFormatter(log_formatter)
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(logging.INFO)
-        console_handler.setFormatter(log_formatter)
-        root_logger.setLevel(logging.DEBUG)
-        root_logger.handlers = [console_handler, file_handler]
-        _logger.info("Measurement session being logged at {}".format(filename))
-
-        def log_error(*args, **kwargs):
-            _logger.critical('Unhandled error caused execution to terminate', exc_info=True)
-        # This works in a basic python session, but not in ipython or spyder
-        sys.excepthook = log_error
-        # This is for ipython (which is also used by spyder)
-        if have_ipython:
-            IPython.core.interactiveshell.InteractiveShell.showtraceback = log_error
-
+        _setup_logging(log_path)
+        _setup_exception_logging()
         _environment_is_setup = True
     else:
         _logger.info("Measurement session continuing in existing log")
 
 
 class Quantity():
-    """
+        """
     A measurement quantity which is being measured or controlled.
 
     Each Quantity is a measurable variable such as time, temperature, voltage
@@ -144,7 +113,7 @@ class Quantity():
             _logger.error("Error while evaluating measurement Quantity '{}':"
                           .format(self.name))
             _logger.error(str(e))
-            raise e
+                raise e
 
 
 def quantity_from_scanner(scanner, suffixes=[" Cap", " Loss"], units=["pF", "Gohm"],

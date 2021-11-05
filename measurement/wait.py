@@ -11,10 +11,13 @@ can be paused or aborted during one of these `Wait`s.
 
 import time
 import numpy
-from . import _logger
+from . import _logger as _measlogger
 import threading
 import ctypes
 from measurement.sequences import Sequence
+from measurement import ThreadWithExcLog
+
+_logger = _measlogger.getChild('wait')
 
 
 class _Wait():
@@ -210,10 +213,10 @@ class For_Seconds(_Wait):
         super().__init__(1, numpy.inf)
         self.number = number
         if number > 60:
-            _logger.debug(f"Waiting for {number} seconds...")
+            _logger.info(f"Waiting for {number} seconds...")
         self.run()
         if number > 60:
-            _logger.debug("...done waiting")
+            _logger.info("...done waiting")
 
     def test(self):
         return (time.time() - self.start_time) > self.number
@@ -233,7 +236,7 @@ class For_Click(_Wait):
             while resp != 1:
                 resp = ctypes.windll.user32.MessageBoxW(0, msg, title, 0x10141)
 
-        self.popup_thread = threading.Thread(target=thread_target, name="Wait For Click")
+        self.popup_thread = ThreadWithExcLog(target=thread_target, name="Wait For Click")
         self.popup_thread.start()
         self.run()
         _logger.debug("...done waiting")

@@ -1,4 +1,4 @@
-# 
+#
 # Copyright 2016-2021 Razorbill Instruments Ltd.
 # This file is part of the Razorbill Lab Python library which is
 # available under the MIT licence - see the LICENCE file for more.
@@ -12,10 +12,10 @@ useful classes such as Exceptions that Instruments might want to raise.
 import pyvisa
 import threading
 import parse
-import logging
 import time
+from measurement import _rootlogger
 
-_logger = logging.getLogger('measurement_system')
+_logger = _rootlogger.getChild('instruments')
 
 instrument_registry = {}
 """ This dict will hold all connected instruments, keys are VISA addresses."""

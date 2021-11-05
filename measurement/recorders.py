@@ -10,15 +10,16 @@ lines at a regular interval.
 """
 
 import csv
-import threading
 import subprocess
 import os
 import time
 import numpy as np
-from . import _logger
 
 KST_BINARY = r'C:\UnmanagedBinaries\KST\bin\kst2.exe'
+from . import _logger as _measlogger
+from . import ThreadWithExcLog, kst_binary
 
+_logger = _measlogger.getChild('recorders')
 recorder_registry = {}
 
 
@@ -46,7 +47,7 @@ class Recorder():
         If True, a kst process will be spawned to plot the data in realtime
         if a string is provided, KST will use a saved session at that path
     quiet : boolean, optional
-        If true, do not log warnings when failing to get data and using NaN 
+        If true, do not log warnings when failing to get data and using NaN
         (useful for long running recorders where instruments my be turned off)
     """
 
@@ -72,7 +73,7 @@ class Recorder():
         self._set_up_file(append, overwrite)
         recorder_registry[str(self)] = self
         self._start()
-                
+
     def _set_up_file(self, append, overwrite):
         """Find right filename, open file, write titles etc. if necessary"""
         new_first_line = ", ".join(self.columns)
@@ -91,7 +92,8 @@ class Recorder():
                 _logger.warn("Could not append to file: file not found. Starting new file.")
         if os.path.isfile(self.filename + '.csv'):
             if overwrite:
-                _logger.info("Starting " + str(self) + ' overwriting existing file with Quantities: ' + new_first_line)
+                _logger.info("Starting '" + str(self) + "' overwriting existing file with Quantities: "
+                             + new_title_line)
             else:
                 n = 1
                 while os.path.isfile(self.filename + f'_{n}' + '.csv'):
@@ -110,7 +112,7 @@ class Recorder():
         self._start_time = time.time()
         if self._plot_kst:
             self.open_kst()
-            
+
     def open_kst(self):
         "Open a KST plot of the file being recorded"
         try:
@@ -185,7 +187,7 @@ class AutoRecorder(Recorder):
                 if not self._paused:
                     self.record_line()
                 time.sleep(self._interval)
-        self._thread = threading.Thread(target=callback,
+        self._thread = ThreadWithExcLog(target=callback,
                                         name="AutoRecorder:" + filename)
         super().__init__(filename, quantites, **kwargs)
 

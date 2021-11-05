@@ -13,7 +13,9 @@ import threading
 import time
 import sys
 import traceback
-from measurement import _logger
+from measurement import _logger as _measlogger
+
+_logger = _measlogger.getChild('sequence')
 
 
 def list_sequences():
