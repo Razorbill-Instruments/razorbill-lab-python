@@ -46,7 +46,7 @@ class Recorder():
         If True, a kst process will be spawned to plot the data in realtime
         if a string is provided, KST will use a saved session at that path
     quiet : boolean, optional
-        If true, do not log warnings when failing to get data and using NaN 
+        If true, do not log warnings when failing to get data and using NaN
         (useful for long running recorders where instruments my be turned off)
     """
 
@@ -72,7 +72,7 @@ class Recorder():
         self._set_up_file(append, overwrite)
         recorder_registry[str(self)] = self
         self._start()
-                
+
     def _set_up_file(self, append, overwrite):
         """Find right filename, open file, write titles etc. if necessary"""
         new_first_line = ", ".join(self.columns)
@@ -110,7 +110,7 @@ class Recorder():
         self._start_time = time.time()
         if self._plot_kst:
             self.open_kst()
-            
+
     def open_kst(self):
         "Open a KST plot of the file being recorded"
         try:

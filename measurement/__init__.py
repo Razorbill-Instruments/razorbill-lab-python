@@ -1,8 +1,13 @@
+#
+# Copyright 2016-2021 Razorbill Instruments Ltd.
+# This file is part of the Razorbill Lab Python library which is
+# available under the MIT licence - see the LICENCE file for more.
+#
 """ Module for measuring things, and writing the results to file.
 
 Designed to work well with the instruments module. Normal usage is to create
 a Quantity for everything you want to measure and then start a Recorder to
-measure to file
+measure to file.
 """
 
 import logging
@@ -10,54 +15,93 @@ import sys
 import numpy as np
 import time
 import __main__
-try:
+import builtins
+have_ipython = getattr(builtins, "__IPYTHON__", False)
+if have_ipython:
     import IPython
-    have_ipython = True
-except ModuleNotFoundError:
-    have_ipython = False
 
-_logger = logging.getLogger('measurement_system')
+_rootlogger = logging.getLogger('razorbill_lab')
+_logger = logging.getLogger('razorbill_lab.measurement')  # for use in this module
+logger = logging.getLogger('razorbill_lab.experiment')    # for use in scripts
 _environment_is_setup = False
+
+_LOG_FMT = '%(asctime)s [%(levelname)s] %(threadName)s > %(message)s'
+
+
+class _ColourFormatter(logging.Formatter):
+    """Logging Formatter with coloured output and no stack traces.
+
+    May not work properly in powershell/cmd on windows? Probably works on
+    most mac/linux and works with IPyhton.
+    """
+    COLOURS = {
+        logging.DEBUG: "\x1b[33m",      # 35 = magenta
+        logging.INFO: "\x1b[32m",       # 32 = green
+        logging.WARNING: "\x1b[33m",    # 33 = yellow (often orange)
+        logging.ERROR: "\x1b[31;1m",    # 31;1 = bold red
+        logging.CRITICAL: "\x1b[41;37;1m"  # 41;30;1 = bold white on red
+    }
+
+    def format(self, record):
+        colour = self.COLOURS.get(record.levelno)
+        resp = super().format(record)
+        return colour + resp + "\x1b[0m"
+
+
+class _IPythonFormatter(_ColourFormatter):
+    """No Stack Traces - we'll use IPython's ones instead"""
+
+    def format(self, record):
+        self.exc_text = None
+        return super().format(record)
+        self.exc_text = None
+
+    def formatException(self, exc_info):
+        return ''
+
+    def formatStack(self, stack_info):
+        return ''
+
+
+def _setup_logging():
+    file_formatter = logging.Formatter(_LOG_FMT, datefmt="%Y-%m-%d %H:%M:%S")
+    filename = "measurement log {}.log".format(time.strftime("%Y-%m-%d %H-%M-%S"))
+    file_handler = logging.FileHandler(filename)
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(file_formatter)
+
+    if have_ipython:
+        console_formatter = _IPythonFormatter(_LOG_FMT, datefmt="%Y-%m-%d %H:%M:%S")
+    else:
+        console_formatter = logging.Formatter(_LOG_FMT, datefmt="%Y-%m-%d %H:%M:%S")
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(console_formatter)
+
+    root_logger = logging.getLogger('razorbill_lab')
+    root_logger.setLevel(logging.DEBUG)
+    root_logger.handlers = [console_handler, file_handler]
+    _logger.info("Log started at: {}".format(filename))
+
+
+def _setup_exception_logging():
+    if have_ipython:
+        def handler(self, etype, value, tb, tb_offset=None):
+            _logger.critical('Unhandled Exception, terminating', exc_info=True)
+            IPython.get_ipython().showtraceback()
+        IPython.get_ipython().set_custom_exc((Exception,), handler)
+    else:
+        def log_error(*args, **kwargs):
+            _logger.critical('Unhandled Exception, terminating', exc_info=True)
+        sys.excepthook = log_error
 
 
 def setup_environment():
-    """
-    Call this at the start of an experiment script/session to set up logging.
-
-    Parameters
-    ----------
-    None.
-
-    Returns
-    -------
-    None.
-
-    """
+    """ Call this at the start of an experiment to set up logging."""
     global _environment_is_setup
     if not _environment_is_setup:
-        log_formatter = logging.Formatter(
-            '%(asctime)s [%(levelname)s] %(threadName)s > %(message)s',
-            datefmt="%Y-%m-%d %H:%M:%S")
-        root_logger = logging.getLogger('measurement_system')
-        filename = "measurement log {}.log".format(time.strftime("%Y-%m-%d %H-%M-%S"))
-        file_handler = logging.FileHandler(filename)
-        file_handler.setLevel(logging.DEBUG)
-        file_handler.setFormatter(log_formatter)
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(logging.INFO)
-        console_handler.setFormatter(log_formatter)
-        root_logger.setLevel(logging.DEBUG)
-        root_logger.handlers = [console_handler, file_handler]
-        _logger.info("Measurement session being logged at {}".format(filename))
-
-        def log_error(*args, **kwargs):
-            _logger.critical('Unhandled error caused execution to terminate', exc_info=True)
-        # This works in a basic python session, but not in ipython or spyder
-        sys.excepthook = log_error
-        # This is for ipython (which is also used by spyder)
-        if have_ipython:
-            IPython.core.interactiveshell.InteractiveShell.showtraceback = log_error
-
+        _setup_logging()
+        _setup_exception_logging()
         _environment_is_setup = True
     else:
         _logger.info("Measurement session continuing in existing log")
