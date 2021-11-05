@@ -12,6 +12,8 @@ Module for interfacing with equiptment from Stanford Reseach systems
 from . import Instrument, ScpiInstrument, ChildInstrument, \
                 _make_setter, _make_getter, _scpi_property
 import bisect
+import numpy as np
+
 
 class StanfordSR830(ScpiInstrument):
     """
@@ -40,7 +42,7 @@ class StanfordSR830(ScpiInstrument):
     next_sens(value) : returns int
     next_time_const(value) : returns int
 
-    Dynamic Properties
+    Properties
     ----------
     meas_x : Get only, float
         measures the current X value, in volts
@@ -153,48 +155,42 @@ class StanfordSR830(ScpiInstrument):
     demod_time_const = _scpi_property('OFLT', '{:d}')
 
 
-
-
-class _Input(ChildInstrument):
+class _CTC100_Input(ChildInstrument):
     """ a thermometer input channel for the CTC100"""
     value = property(_make_getter('in{subaddr}.Value?', '{:g}'))
-    
-class _AIO(ChildInstrument):
+
+
+class _CTC100_AIO(ChildInstrument):
     """ an analog input input channel for the CTC100. make sure the relevent
     AIO is configured for input or output through the front panel. Outputs can
     be get or set, but don't set an input"""
-    #TODO work out what happens if you try to set an input
+    # TODO work out what happens if you try to set an input
     voltage = property(_make_getter('"AIO{subaddr}.Value?"', '{:g}'),
-                       _make_setter('"AIO{subaddr}.Value"','{:g}'))
-    
-class _Output(ChildInstrument):
+                       _make_setter('"AIO{subaddr}.Value"', '{:g}'))
+
+
+class _CTC100_Output(ChildInstrument):
     """ a output output channel for the CTC100"""
     ramp = property(_make_getter('"Out {subaddr}.PID.Ramp?"', '{:g}'),
                     _make_setter('"Out {subaddr}.PID.Ramp"', '{:g}'))
     target = property(_make_getter('"Out {subaddr}.PID.RampT?"', '{:g}'),
-                    _make_setter('"Out {subaddr}.PID.RampT"', '{:g}'))
+                      _make_setter('"Out {subaddr}.PID.RampT"', '{:g}'))
     setpoint = property(_make_getter('"Out {subaddr}.PID.Setpoint?"', '{:g}'),
                         _make_setter('"Out {subaddr}.PID.Setpoint"', '{:g}'))
     power = property(_make_getter('"Out {subaddr}.value?"', '{:g}'),
-                        _make_setter('"Out {subaddr}.value"', '{:g}'))
+                     _make_setter('"Out {subaddr}.value"', '{:g}'))
+
 
 class CTC100(Instrument):
-    """
-    Stanford CTC100 Cryogenic Temperature Controller
-    ================================================
-   
-    This isntrument has a lot of commands availabe and one can also upload 
-    macros that can then be exicuted as commands. I'm only implementing the  
-    basic necessesitites in this module, on the assumption we will mostly 
-    configure the instrument through it's front panel interface. It's 
-    structured so that adding more functions should be easy.
-    
-    At some point we may want to write different PID tables when we start and
-    stop the compressor
-    
-    The instrument can be connected by RS232, USB, Ethernet or GPIB.  This 
+    """Stanford CTC100 Cryogenic Temperature Controller
+
+    This instrument has a lot of commands availabe and one can also upload
+    macros that can then be executed as commands. This module currently only
+    has the basics.
+
+    The instrument can be connected by RS232, USB, Ethernet or GPIB.  This
     module only tested for USB for now.
-   
+
     Construction
     ------------
     ``ctc = CTC100('visa_name')``
@@ -202,38 +198,75 @@ class CTC100(Instrument):
     visa_name : string, required
         The address of the instrument, e.g. ``'com4'``
 
+    Properties
+    ----------
+    output_enable : bool
+        enable or disable all heaters and analog outs.
 
-    Methods
-    -------
-    none yet
-    
-    Dynamic Properties
-    ------------------
-    inputs[n].value : where n is a thermometer channel 1 to 4. 
-                                 units: as per setting on instrument. 
-                                 get only
-    output[n].setpoint : where n is output channel 1 or 2. 
-                         Units: K. 
-                         Use the front panel interface to link the output to  
-                         the relevent thermometer
-                         set or get
-    output[n].ramp : where n is output channel 1 or 2. 
-                     units: K/sec.
-                     set to 0 for unlimited ramp rate
-                     set or get 
+    inputs[n].value : float
+        where n is a thermometer channel 1 to 4. units: as per setting on
+        instrument. Get only
+    output[n].setpoint : float
+        where n is output channel 1 or 2. Units: K. Use the front panel
+        interface to link the output to the relevent thermometer
+    output[n].ramp : float
+        where n is output channel 1 or 2. units: K/sec. set to 0 for unlimited
+        ramp rate
+    all_vals : list of floats (may be nan)
+    all_val_names : list of strings
+    all_val_units : list of strings
+        These three are a list of parameters measured by the instrument,
+        including input temperatures, output powers, AIO values and severeral
+        more note reported elsewhere such as heater resistances. Exactly what
+        is included depends on congifuration of the instrument.
     """
     _idnstring = "Stanford Research Systems, CTC100 Cryogenic Temperature Controller"
- 
-    def _setup(self):
-        self.inputs = {1: _Input(self, 1),
-                       2: _Input(self, 2),
-                       3: _Input(self, 3),
-                       4: _Input(self, 4)}
-        self.outputs ={1: _Output(self, 1),
-                       2: _Output(self, 2)}
-        self.analog = {1: _AIO(self, 1),
-                       2: _AIO(self, 2),
-                       3: _AIO(self, 3),
-                       4: _AIO(self, 4)}
-        
 
+    def _setup(self):
+        self.inputs = {1: _CTC100_Input(self, 1),
+                       2: _CTC100_Input(self, 2),
+                       3: _CTC100_Input(self, 3),
+                       4: _CTC100_Input(self, 4)}
+        self.outputs = {1: _CTC100_Output(self, 1),
+                        2: _CTC100_Output(self, 2)}
+        self.analog = {1: _CTC100_AIO(self, 1),
+                       2: _CTC100_AIO(self, 2),
+                       3: _CTC100_AIO(self, 3),
+                       4: _CTC100_AIO(self, 4)}
+
+    @property
+    def output_enable(self):
+        resp = self.raw_query('OutputEnable?')
+        if resp.lower().strip("'") == "on":
+            return True
+        if resp.lower().strip("'") == "off":
+            return False
+        else:
+            raise ValueError(f"Could not parse response '{resp}' from CTC100")
+
+    @output_enable.setter
+    def output_enable(self, boolean):
+        if boolean:
+            s = "on"
+        else:
+            s = "off"
+        self.raw_write(f'"outputEnable {s}"')
+
+    @property
+    def all_vals(self):
+        resp = self.raw_query('"getOutput?"')
+        return np.genfromtxt(resp.split(','))
+
+    @property
+    def all_val_names(self):
+        resp = self.raw_query('"getOutput.names?"')
+        resp_list = [r.strip() for r in resp.split(',')]
+        return resp_list
+
+    @property
+    def all_val_units(self):
+        resp = self.raw_query('"getOutput.units?"')
+        resp_list = [r.strip() for r in resp.split(',')]
+        resp_list = ['-' if unit == '' else unit for unit in resp_list]
+        resp_list = ['ohm' if unit == 'ê' else unit for unit in resp_list]
+        return resp_list
