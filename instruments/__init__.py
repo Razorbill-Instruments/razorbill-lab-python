@@ -31,6 +31,32 @@ class WrongInstrumentError(Exception):
     """
     pass
 
+class InstrumentSaysNo(Exception):
+    """For some reason, the instrument did not do what the message asked.
+
+    Where the reason for non-compliance is known, consider using
+    InstrumentConfigError or BadCommandError instead.
+    """
+    pass
+
+class InstrumentConfigError(InstrumentSaysNo):
+    """The instrument can't comply due to a configuration error.
+
+    Raise this when IO completed OK, but the instrument can't do what it was
+    asked to do, e.g. you have tried to set a value on a digital IO which is
+    configured for input, or an instrument is disabled by a switch or digital
+    enable input.
+    """
+    pass
+
+class BadCommandError(InstrumentSaysNo):
+    """The message sent to the instrument was malformed or has a bad parameter.
+
+    Raise this when IO completed OK, but the command was not recognised,
+    or otherwise rejected by the instrument
+    """
+    pass
+
 
 class _Multiton(type):
     """ Metaclass for creating multitions. A new object will only be created
@@ -39,6 +65,12 @@ class _Multiton(type):
     Adapted from stackoverflow http://stackoverflow.com/questions/3615565/
     """
     def __call__(cls, visa_name, *args, **kwargs):
+        try:
+            resource_manager = pyvisa.ResourceManager()
+            visa_name = resource_manager.resource_info(visa_name).resource_name
+        except pyvisa.VisaIOError:
+            # Not a valid visa address. Use it anyway, it might be a non-visa multiton instrument
+            # but even if it is a bad value, it is better to fail in __init__ than here
         visa_name = visa_name.upper()
         if visa_name not in instrument_registry:
             self = cls.__new__(cls, visa_name, *args, **kwargs)
