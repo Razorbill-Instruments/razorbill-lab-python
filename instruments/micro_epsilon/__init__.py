@@ -47,9 +47,11 @@ _error_codes = {
     -27: 'ERR_SENSOR_ANSWER_WARNING',
     }
 
+
 class MEDAQlibError(Exception):
     """Exception raised if there is an error in the library"""
     pass
+
 
 class MEDAQLib:
     """This class forms a fairly thin wrapper around the Micro Epsilon MEDAQLib
@@ -61,11 +63,11 @@ class MEDAQLib:
         buffer = create_string_buffer(20)
         self._dll.GetDLLVersion(buffer, 20)
         self.dll_version = buffer.value.decode('ascii')
-        
+
     def _import_dll(self):
         python_is_64bit = sizeof(c_voidp) > 4
-        if python_is_64bit: 
-            dllname = 'MEDAQLib64.dll' 
+        if python_is_64bit:
+            dllname = 'MEDAQLib64.dll'
         else:
             dllname = 'MEDAQLib32.dll'
         dll_path = os.path.join(_module_path, dllname)
@@ -73,7 +75,7 @@ class MEDAQLib:
             self._dll = WinDLL(dll_path)
         else:
             raise ImportError("Could not find MEDAQLib DLL")
-        
+
     def _configure_dll_types(self):
         def check_error(error_code):
             if error_code == 0:
@@ -88,13 +90,13 @@ class MEDAQLib:
                 _logger.warn(message.format(error_code, error_desc))
                 return
             raise MEDAQlibError("Error {} ({}) in MEDAQLib".format(error_code, error_desc))
-        
+
         def setup_types(func_name, argtypes):
             """Simplify wrapping ctypes functions using standard error codes"""
             func = self._dll.__getattr__(func_name)
             func.restype = check_error
             func.argtypes = argtypes
-        
+
         self._dll.CreateSensorInstByNameU.argtypes = [c_char_p]
         setup_types('ReleaseSensorInstance', (c_long,))
         setup_types('SetParameterInt',       (c_long, c_char_p, c_int))
@@ -112,69 +114,69 @@ class MEDAQLib:
         setup_types('Poll',                  [c_long, POINTER(c_int), POINTER(c_double), c_int])
         setup_types('GetError',              (c_long, c_char_p, c_int))
         setup_types('GetDLLVersion',         (c_char_p, c_long))
-        
+
     def create_sensor(self, name):
         handle = self._dll.CreateSensorInstByName(name.encode('ascii'))
         if handle == 0:
             raise MEDAQlibError("MEDAQLib failed to create sensor")
         return handle
-    
+
     def release_sensor(self, handle):
         self._dll.ReleaseSensorInstance(handle)
-    
+
     def set_parameter_int(self, handle, parameter, value):
         self._dll.SetParameterInt(handle, parameter.encode('ascii'), int(value))
-    
+
     def set_parameter_double(self, handle, parameter, value):
         self._dll.SetParameterDouble(handle, parameter.encode('ascii'), float(value))
-        
+
     def set_parameter_string(self, handle, parameter, value):
         self._dll.SetParameterString(handle, parameter.encode('ascii'), value.encode('ascii'))
-        
+
     def get_parameter_int(self, handle, parameter):
         value = c_int()
         self._dll.GetParameterInt(handle, parameter.encode('ascii'), byref(value))
         return value.value
-    
+
     def get_parameter_double(self, handle, parameter):
         value = c_double()
         self._dll.GetParameterDouble(handle, parameter.encode('ascii'), byref(value))
         return value.value
-    
+
     def get_parameter_string(self, handle, parameter):
         value = create_string_buffer(100)
         self._dll.GetParameterString(handle, parameter.encode('ascii'), value, byref(c_int(100)))
         return value.value.decode('ascii')
-    
+
     def clear_parameters(self, handle):
         self._dll.ClearAllParameters(handle)
-    
-    def open_sensor(self,handle):
+
+    def open_sensor(self, handle):
         self._dll.OpenSensor(handle)
-    
+
     def close_sensor(self, handle):
         self._dll.CloseSensor(handle)
-        
+
     def sensor_command(self, handle):
         self._dll.SensorCommand(handle)
-    
+
     def data_available(self, handle):
         num_points = c_int()
         self._dll.DataAvail(handle, byref(num_points))
         return num_points.value
-    
+
     def data_transfer(self, handle, num_points):
         array_type = c_double * num_points
         self._dll.TransferData.argtypes[2] = POINTER(array_type)
         pointer_data = array_type()
         num_read = c_int()
         self._dll.TransferData(handle, None, pointer_data, num_points, byref(num_read))
-        data =  [pointer_data[i] for i in range(len(pointer_data))]
+        data = [pointer_data[i] for i in range(len(pointer_data))]
         if num_read.value < num_points:
-            _logger.warn("Asked for more data than there was in the MEDAQLib buffer")
+            _logger.warning("Asked for more data than there was in the MEDAQLib buffer")
             data = data[0:num_read.value]
         return data
-    
+
     def flush_buffer(self, handle):
         num_read = c_int()
         self._dll.TransferData(handle, None, None, 0, byref(num_read))
@@ -186,16 +188,17 @@ class MEDAQLib:
         self._dll.Poll(handle, None, pointer_data, num_points)
         data = [pointer_data[i] for i in range(len(pointer_data))]
         return data
-    
+
     def get_error_text(self, handle):
         value = create_string_buffer(200)
         self._dll.GetError(handle, value, c_int(100))
         return value.value.decode('ascii')
-        
+
+
 class _Multiton(type):
     """ Metaclass for creating multitions. A new object will only be created
-    if there is not another object of the class with the same name and  address 
-    in the instrument_registry. Not a VISA instrument so makes up a fake VISA 
+    if there is not another object of the class with the same name and  address
+    in the instrument_registry. Not a VISA instrument so makes up a fake VISA
     name, otherwise the same as the version at instruments._Multition
     """
     def __call__(cls, address, *args, **kwargs):
@@ -205,14 +208,15 @@ class _Multiton(type):
             cls.__init__(self, address, *args, **kwargs)
             instrument_registry[visa_name] = self
         else:
-            _logger.warn("Reusing existing " + str(instrument_registry[visa_name]))
+            _logger.info("Reusing existing " + str(instrument_registry[visa_name]))
         return instrument_registry[visa_name]
-    
+
+
 class _Sensor(metaclass=_Multiton):
-    """This is a base class for all micro epsilon sensor. Subclass it"""    
+    """This is a base class for all micro epsilon sensor. Subclass it"""
     def __str__(self):
         return type(self).__name__ + ' instrument at ' + self.address
-    
+
     def __init__(self, address):
         self._lib = MEDAQLib()
         self.address = address
@@ -223,7 +227,7 @@ class _Sensor(metaclass=_Multiton):
         self._lib.set_parameter_string(self._handle, "IP_Interface", "TCP/IP")
         self._lib.open_sensor(self._handle)
         _logger.info("Connected to " + str(self))
-    
+
     def __del__(self):
         if self._handle is not None:
             try:
@@ -231,7 +235,8 @@ class _Sensor(metaclass=_Multiton):
             finally:
                 self._lib.release_sensor(self._handle)
         _logger.info("Disconnected from " + str(self))
-                
+
+
 class _Channel():
     """This is a base class for individual channels on a sensor. Subclass it"""
     def __init__(self, lib, num, num_channels, parent_handle):
@@ -240,12 +245,12 @@ class _Channel():
         self._num = num
         self._num_channels = num_channels
         self._parent_handle = parent_handle
-        
+
     def _poll(self):
         values = self._lib.poll(self._parent_handle, self._num_channels)
         if self._num == 0:
             return values
         else:
             return values[self._num-1]
-    
+
     measure = property(fget=_poll, doc="The most recent measured position(s)")
