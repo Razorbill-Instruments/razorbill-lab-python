@@ -151,3 +151,73 @@ def quantity_from_scanner(scanner, suffixes=[" Cap", " Loss"], units=["pF", "Goh
         q_titles = q_titles + [cap + suffixes[0], cap + suffixes[1]]
     q = Quantity(q_titles, scanner.measure_all, q_units, q_scalefactor, skiptest)
     return q
+
+
+class Quant_Checker():
+    def __init__(self, quant, limits, action=None, index=None):
+        """Check a quantity and low a warning if it is outside set limits.
+
+        Call `.check()` at e.g. 30 second intervals. If the quantity is outside
+        the limits it will log a warning. If it stays outside limits, it will
+        log further warnings with decreasing frequency. It will log an info
+        when the quantity goes back in limits. Optionally, it can take an
+        action when the quantity first goes outside limits.
+
+        Parameters
+        ----------
+        quant : mesurement.Quantity
+            The quantity to be checked.
+        limits : itterable of two numbers (min, max)
+            `quant` should stay between these values
+        action : callable, optional
+            Callable will be called when the `quant` goes outside `limits`. It
+            would be prudent to include logging in the callable. The default,
+            `None` means take no action.
+        index : int, optional
+            If `quant.value` returns a list, check the value at this index.
+        """
+        self.quant = quant
+        self.limits = limits
+        self.action = action
+        self.index = index
+        self.num_checks = 0
+        self.num_failures = 0
+
+    @classmethod
+    def _is_pow_two(cls, number):
+        """Check if the given integer is a power of two."""
+        if number < 1 or not isinstance(number, int):
+            return False
+        # check if only one bit is set and that bit is first
+        # e.g 8: 1000 & 0111 = 0000, 6: 0110 & 0101 = 0100
+        return (number & (number-1) == 0)
+
+    def check(self):
+        """Perform check on quantity. Call e.g. every 30 sec."""
+        self.num_checks += 1
+        if self.index is None:
+            value = self.quant.value
+            name = self.quant.name
+            units = self.quant.units
+        else:
+            value = self.quant.value[self.index]
+            name = self.quant.name[self.index]
+            units = self.quant.units[self.index]
+
+        if not (self.limits[0] < value < self.limits[1]):
+            self.num_failures += 1
+            if self.num_failures == 1:
+                _logger.error(f"Quantity '{name}' is {value}{units}. " +
+                              f"This is outside limits ({self.limits[0]} to {self.limits[1]})")
+                if self.action is not None:
+                    _logger.warning("The above warning has triggered an action to correct it. " +
+                                    "Hopefull the next log message will say what")
+                    self.action()
+            elif self._is_pow_two(self.num_failures):
+                _logger.warning(f"Quantity '{name}' is {value}{units}. " +
+                                f"This is still outside limits ({self.limits[0]} to {self.limits[1]}). " +
+                                f"Has failed {self.num_failures} times")
+        elif self.num_failures > 0:
+            _logger.info(f"Quantity '{name}' is {value}{units}. " +
+                         f"This is back in limits ({self.limits[0]} to {self.limits[1]})")
+            self.num_failures = 0
