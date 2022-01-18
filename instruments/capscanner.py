@@ -81,6 +81,8 @@ class CapScanner:
         """
         self.bridge = bridge
         self.capsets = capsets
+        self._bridge_wait_time = 0  # For small capacitances, first measurement after abort is fine.
+        self._relay_wait_time = 0.01  # probably conservative, in testing even 0 was fine.
         self._all_locks = [bridge.lock] + [capset.mplex.lock for capset in capsets]
         self._have_locks = [False] * len(self._all_locks)
         self.labels = sum((capset.caps for capset in capsets), ())
@@ -108,12 +110,15 @@ class CapScanner:
                 self._have_locks[ix] = False
 
     def __del__(self):
+        try:
         self._release_locks()
+        except Exception:
+            pass
 
     def select(self, channel):
         """Set a single channel through the multiplexers to the bridge"""
         if channel > len(self):
-            raise RuntimeError(f"This CapScanner only has {len(self)} channels")
+            raise RuntimeError(f"This CapScanner only has {len(self)} channels but channel {channel} was requested")
         count = 0
         for capset in self.capsets:
             low = count + 1
@@ -123,16 +128,16 @@ class CapScanner:
                 capset.mplex.output = capset.mp_position(channel - low + 1)
             else:
                 capset.mplex.output = 0
-        time.sleep(0.05)  # USB-IO time plus relay settling time. Could shorten.
+        time.sleep(self._relay_wait_time)
+        self.bridge.abort_meas()  # restart measurment
 
     def measure(self, channel):
         """Measure a capactior. Configures multiplexers and makes measurement"""
         try:
             self._aquire_locks()
             self.select(channel)
-            time.sleep(0.1)  # TODO: set Bridge settling time.
-            # May be able to trigger measurements on the bridge to speed that up.
-            return self.bridge.meas
+            time.sleep(self._bridge_wait_time)
+            return self.bridge.meas_all
         finally:
             self._release_locks()
 
@@ -145,6 +150,7 @@ class CapScanner:
 
 
 class AutoCapScanner(CapScanner):
+    # TODO: write this if we need it.
     # Auto version needs it's own thread. Main advantage is that it is IO bound and
     # won't have to wait for other IO. Maybe a multi-thread Recorder would be better?
     # It keeps changing round the caps, measuring them as fast as possible.

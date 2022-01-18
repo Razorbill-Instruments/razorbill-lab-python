@@ -138,9 +138,9 @@ class Quantity():
                 raise e
 
 
-def quantity_from_scanner(scanner, suffixes=[" Cap", " Loss"], units=["pF", "Gohm"],
-                          scalefactor=[1e12, 1e-9], skiptest=False):
-    """Build a Quantity from a CapScanner or similar object"""
+def quantity_from_scanner(scanner, suffixes=[" Cap", " Loss", " ExcVolt"], units=["pF", "-", "V"],
+                          scalefactor=[1e12, 1, 1], skiptest=False):
+    """Build a Quantity from a CapScanner or similar object."""
     q_titles = []
     q_units = []
     q_scalefactor = []
@@ -148,7 +148,7 @@ def quantity_from_scanner(scanner, suffixes=[" Cap", " Loss"], units=["pF", "Goh
         q_units = q_units + units
         q_scalefactor = q_scalefactor + scalefactor
         cap = scanner.labels[channel]
-        q_titles = q_titles + [cap + suffixes[0], cap + suffixes[1]]
+        q_titles = q_titles + [cap + suffixes[0], cap + suffixes[1], cap + suffixes[2]]
     q = Quantity(q_titles, scanner.measure_all, q_units, q_scalefactor, skiptest)
     return q
 
