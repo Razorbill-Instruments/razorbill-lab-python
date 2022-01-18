@@ -14,8 +14,6 @@ import subprocess
 import os
 import time
 import numpy as np
-
-KST_BINARY = r'C:\UnmanagedBinaries\KST\bin\kst2.exe'
 from . import _logger as _measlogger
 from . import ThreadWithExcLog, kst_binary
 
@@ -118,12 +116,12 @@ class Recorder():
         try:
             datafile_path = os.path.join(os.getcwd(), self.filename + '.csv')
             if isinstance(self._plot_kst, str):
-                subprocess.Popen([KST_BINARY, self._plot_kst, "-F", datafile_path])
+                subprocess.Popen([kst_binary, self._plot_kst, "-F", datafile_path])
             else:
                 layoutargs = ['-x', 'Time_Elapsed']
                 for col in self.columns[1:]:
                     layoutargs += ['-y', col]
-                subprocess.Popen([KST_BINARY, datafile_path] + layoutargs)
+                subprocess.Popen([kst_binary, datafile_path] + layoutargs)
         except Exception as e:
             _logger.error(str(self) + " failed to launch KST subprocess")
             _logger.error(str(self) + " Error was: " + str(e))
