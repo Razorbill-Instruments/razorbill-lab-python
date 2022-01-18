@@ -20,10 +20,11 @@ from . import ThreadWithExcLog, kst_binary
 _logger = _measlogger.getChild('recorders')
 recorder_registry = {}
 
+# TODO: the Recorder class is a bit messy, _set_up_file in particular could do with refactoring.
+
 
 class Recorder():
-    """
-    Record several `Quantity`s and write them to a file.
+    """Record several `Quantity`s and write them to a file.
 
     Opens a CSV file and writes column headers into it.  Each time
     `record_line` is called, it will get the value of each quanity and add them
@@ -44,9 +45,6 @@ class Recorder():
     plot_kst : boolean or string, optional
         If True, a kst process will be spawned to plot the data in realtime
         if a string is provided, KST will use a saved session at that path
-    quiet : boolean, optional
-        If true, do not log warnings when failing to get data and using NaN
-        (useful for long running recorders where instruments my be turned off)
     """
 
     def __str__(self):
@@ -59,8 +57,6 @@ class Recorder():
         self.file = None
         self.columns = ['Time_Elapsed']
         self.column_units = ['s']
-        self.quiet = quiet
-        self.quiet_warned = [False] * len(quantites)
         for quantity in self.quantities:
             if type(quantity.name) is list:
                 self.columns = self.columns + quantity.name
@@ -137,13 +133,7 @@ class Recorder():
                     else:
                         values.append(quantity.value)
                 except Exception:
-                    if not self.quiet:
                         _logger.error(f"Recorder failed to get value from Quantity '{quantity.name}', using NaN")
-                    else:
-                        if not self.quiet_warned[ix_quant]:
-                            _logger.warning(f"Recorder failed to get value from Quantity '{quantity.name}', using NaN."
-                                            +" Recorder is quiet, so you will not get another warning for this quantity.")
-                            self.quiet_warned[ix_quant] = True
                     values = values + [np.nan] * np.size(quantity.name)
             self._writer.writerow(values)
             self._file.flush()

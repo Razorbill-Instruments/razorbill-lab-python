@@ -54,6 +54,9 @@ class Quantity():
         The measured value will be multiplied by this before being returned
     skiptest : Boolean, optional
         Unless this is true, immediatly try getting data to test the source.
+    quiet : Boolean, optional
+        If an error occours while getting the value, quiet quantities will
+        return np.NaN, not quiet ones log and then re-raise the exception.
 
     Data Source
     -----------
@@ -78,13 +81,17 @@ class Quantity():
         The value of the quanitiy at the moment the property is accessed.
         Note that it may take several milliseconds to get it if it comes from
         an instrument which takes a physical measurment.
-
     """
 
-    def __init__(self, name, source, units, scalefactor=1, skiptest=False):
+    def __init__(self, name, source, units, scalefactor=1, skiptest=False, quiet=False):
         self.name = name
         self.units = units
         self.scalefactor = scalefactor
+        self.quiet = quiet
+        self._has_warned = False
+        if isinstance(name, list):
+            if not isinstance(units, list) or len(name) != len(units):
+                raise TypeError('If name is a list, units must be a list of the same length.')
         if callable(source):
             self._get_value = source
             logstr = "callable " + str(source)
@@ -100,19 +107,34 @@ class Quantity():
                       + " from " + logstr)
         # Verify that it works
         if not skiptest:
-            self.value
+            val = self.value
+            if isinstance(name, list):
+                if not isinstance(val, list) or len(name) != len(val):
+                    raise TypeError('If name is a list, the source must return a list of the same length.')
 
     @property
     def value(self):
         try:
             if type(self.name) is list:
-                return list(np.multiply(self._get_value(), self.scalefactor))
+                val = list(np.multiply(self._get_value(), self.scalefactor))
             else:
-                return self._get_value() * self.scalefactor
+                val = self._get_value() * self.scalefactor
+            self._has_warned = False
+            return val
         except Exception as e:
-            _logger.error("Error while evaluating measurement Quantity '{}':"
-                          .format(self.name))
-            _logger.error(str(e))
+            if self.quiet:
+                if not self._has_warned:
+                    _logger.warning(f"Error while evaluating measurement Quantity '{self.name}', "
+                                    + "Will use NaN. This warning appears once per run of failures",
+                                    exc_info=True)
+                    self._has_warned = True
+                if type(self.name) is list:
+                    return [np.nan] * np.size(self.name)
+                else:
+                    return np.nan
+            else:
+                _logger.error(f"Error while evaluating measurement Quantity '{self.name}'",
+                              exc_info=True)
                 raise e
 
 
