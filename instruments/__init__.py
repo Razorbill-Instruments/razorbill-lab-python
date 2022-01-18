@@ -71,7 +71,7 @@ class _Multiton(type):
         except pyvisa.VisaIOError:
             # Not a valid visa address. Use it anyway, it might be a non-visa multiton instrument
             # but even if it is a bad value, it is better to fail in __init__ than here
-        visa_name = visa_name.upper()
+            visa_name = visa_name.upper()
         if visa_name not in instrument_registry:
             self = cls.__new__(cls, visa_name, *args, **kwargs)
             cls.__init__(self, visa_name, *args, **kwargs)
@@ -81,7 +81,24 @@ class _Multiton(type):
         return instrument_registry[visa_name]
 
 
-class Instrument(metaclass=_Multiton):
+class _Freezable():
+    """Class which will not allow new attributes to be added accidentally.
+
+    This is mostly for classes which will be used from the interactive
+    interpreter, where it is easy to add a new attrubute by accident when
+    trying to set one.  To use this, subclass it and add `self._is_frozen = True`
+    at the end of __init__
+    """
+    _is_frozen = False
+
+    def __setattr__(self, key, value):
+        if self._is_frozen and key not in dir(self):
+            raise TypeError(("Tried to add new attribute '{}' to {}. If you actually"
+                             " want that set _is_frozen to False".format(key, self)))
+        object.__setattr__(self, key, value)
+
+
+class Instrument(_Freezable, metaclass=_Multiton):
     """Instrument abstract class; subclass this to make an instrument.
 
     Sensible default methods are provided, they should work for most instruments.
@@ -93,15 +110,11 @@ class Instrument(metaclass=_Multiton):
     This also has functionality to prevent new attributes being added at
     runtime, to protect against typos.
     """
-    _is_frozen = False
     _idnstring = ""
-    _io_holdoff = 1 / 1000  # 1ms minimum between IO ops. Override as necessary
-
-    def __setattr__(self, key, value):
-        if self._is_frozen and key not in dir(self):
-            raise TypeError(("Tried to add new attribute '{}' to {}. If you actually"
-                             " want that set _is_frozen to False".format(key, self)))
-        object.__setattr__(self, key, value)
+    # 1ms minimum between IO ops. Override as necessary
+    _io_holdoff = 1 / 1000
+    # instument will be disconnected after this many consecutive io failures. Override with None to disable.
+    _max_io_fails = 10
 
     def __str__(self):
         return type(self).__name__ + ' instrument at ' + self._visa_name
@@ -111,17 +124,13 @@ class Instrument(metaclass=_Multiton):
         Arguments:
             visa_name: Visa name like 'ASRL3::INSTR'
         """
-        resource_manager = pyvisa.ResourceManager()
         self._visa_name = visa_name
         self.lock = threading.RLock()
         self._sub_address = None
         self._last_io_time = 0
-        with self.lock:
-            self._pyvisa = resource_manager.open_resource(visa_name)
-            self._setup()
-            self._check_idn()
-            self._config()
-        _logger.debug("Connected to " + str(self))
+        self._num_io_fails = 0
+        self._pyvisa = None
+        self.connect()
         self._is_frozen = True
 
     def _setup(self):
@@ -145,27 +154,71 @@ class Instrument(metaclass=_Multiton):
 
     def _config(self):
         """override this method to configure the instrument after the
-        connection is open. Typically used to set units, measurements speeds
-        or configure input filters
+        connection is open.
         """
         pass
+
+    def connect(self):
+        "Connect to the instrument. Called automatically during __init__"
+        resource_manager = pyvisa.ResourceManager()
+        with self.lock:
+            self._pyvisa = resource_manager.open_resource(self._visa_name)
+            self._pyvisa.encoding = "cp1252"  # Change in setup() if necessary
+            self._setup()
+            self._check_idn()
+            self._config()
+            _logger.debug("Connected to " + str(self))
+
+    def disconnect(self):
+        """Disconnect from the instrument"""
+        try:
+            # Depending on the state it is in, this may or may not work.
+            self._pyvisa.close()
+        except pyvisa.VisaIOError:
+            pass
+        self._pyvisa = None
+        _logger.debug("Disconnected from " + str(self))
 
     def raw_write(self, string):
         """Write string to the instrument."""
         with self.lock:
+            if self._pyvisa is None:
+                return
             while time.time() - self._last_io_time < self._io_holdoff:
                 time.sleep(self._io_holdoff / 5)
-            self._pyvisa.write(string)
-            self._last_io_time = time.time()
+            try:
+                self._pyvisa.write(string)
+                self._last_io_time = time.time()
+                self._num_io_fails = 0
+            except pyvisa.VisaIOError as e:
+                if (self._max_io_fails is not None) and (self._num_io_fails < self._max_io_fails):
+                    self._num_io_fails += 1
+                else:
+                    self.disconnect()
+                    _logger.error(f"{self._num_io_fails} IO errors on {str(self)}, disconnecting. "
+                                  + "Fix the problem then use self.connect() to get it back")
+                raise e
 
     def raw_read(self):
         """Read string from the instrument."""
         with self.lock:
+            if self._pyvisa is None:
+                return None
             while time.time() - self._last_io_time < self._io_holdoff:
                 time.sleep(self._io_holdoff / 5)
-            ans = self._pyvisa.read(encoding='cp1252').strip()
-            self._last_io_time = time.time()
-            return ans
+            try:
+                ans = self._pyvisa.read().strip()
+                self._last_io_time = time.time()
+                self._num_io_fails = 0
+                return ans
+            except pyvisa.VisaIOError as e:
+                if (self._max_io_fails is not None) and (self._num_io_fails < self._max_io_fails):
+                    self._num_io_fails += 1
+                else:
+                    self.disconnect()
+                    _logger.error(f"{self._num_io_fails} IO errors on {str(self)}, disconnecting. "
+                                  + "Fix the problem then use self.connect() to get it back")
+                raise e
 
     def raw_query(self, string):
         """Write string then read from the instrument"""
@@ -191,7 +244,7 @@ class ScpiInstrument(Instrument):
         self.raw_write('*CLS')
 
 
-class ChildInstrument():
+class ChildInstrument(_Freezable):
     """ Used for sub-instruments, such as a module in a mainframe (where
     the module doesn't have a separate VISA address) or a channel in a multi-
     channel instrument
@@ -201,9 +254,10 @@ class ChildInstrument():
         return (type(self).__name__ + " at subaddr=" + str(self._sub_address)
                 + " on " + str(self.parent))
 
-    def __init__(self, parent, id):
+    def __init__(self, parent, sub_address):
         self.parent = parent
-        self._sub_address = id
+        self._sub_address = sub_address
+        self._is_frozen = True
 
     def raw_write(self, *args, **kwargs):
         self.parent.raw_write(*args, **kwargs)
