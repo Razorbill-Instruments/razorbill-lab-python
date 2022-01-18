@@ -165,20 +165,20 @@ class _CTC100_AIO(ChildInstrument):
     AIO is configured for input or output through the front panel. Outputs can
     be get or set, but don't set an input"""
     # TODO work out what happens if you try to set an input
-    voltage = property(_make_getter('"AIO{subaddr}.Value?"', '{:g}'),
-                       _make_setter('"AIO{subaddr}.Value"', '{:g}'))
+    voltage = property(_make_getter('AIO{subaddr}.Value?', '{:g}'),
+                       _make_setter('AIO{subaddr}.Value', '{:g}'))
 
 
 class _CTC100_Output(ChildInstrument):
     """ a output output channel for the CTC100"""
-    ramp = property(_make_getter('"Out {subaddr}.PID.Ramp?"', '{:g}'),
-                    _make_setter('"Out {subaddr}.PID.Ramp"', '{:g}'))
-    target = property(_make_getter('"Out {subaddr}.PID.RampT?"', '{:g}'),
-                      _make_setter('"Out {subaddr}.PID.RampT"', '{:g}'))
-    setpoint = property(_make_getter('"Out {subaddr}.PID.Setpoint?"', '{:g}'),
-                        _make_setter('"Out {subaddr}.PID.Setpoint"', '{:g}'))
-    power = property(_make_getter('"Out {subaddr}.value?"', '{:g}'),
-                     _make_setter('"Out {subaddr}.value"', '{:g}'))
+    ramp = property(_make_getter('Out{subaddr}.PID.Ramp?', '{:g}'),
+                    _make_setter('Out{subaddr}.PID.Ramp', '{:g}'))
+    target = property(_make_getter('Out{subaddr}.PID.RampT?', '{:g}'),
+                      _make_setter('Out{subaddr}.PID.RampT', '{:g}'))
+    setpoint = property(_make_getter('Out{subaddr}.PID.Setpoint?', '{:g}'),
+                        _make_setter('Out{subaddr}.PID.Setpoint', '{:g}'))
+    power = property(_make_getter('Out{subaddr}.value?', '{:g}'),
+                     _make_setter('Out{subaddr}.value', '{:g}'))
 
 
 class CTC100(Instrument):
@@ -190,6 +190,8 @@ class CTC100(Instrument):
 
     The instrument can be connected by RS232, USB, Ethernet or GPIB.  This
     module only tested for USB for now.
+
+    It is a good idea to set system->verbose->low from the front panel.
 
     Construction
     ------------
@@ -223,6 +225,7 @@ class CTC100(Instrument):
     _idnstring = "Stanford Research Systems, CTC100 Cryogenic Temperature Controller"
 
     def _setup(self):
+        self._pyvisa.encoding = 'cp437'
         self.inputs = {1: _CTC100_Input(self, 1),
                        2: _CTC100_Input(self, 2),
                        3: _CTC100_Input(self, 3),
@@ -233,6 +236,11 @@ class CTC100(Instrument):
                        2: _CTC100_AIO(self, 2),
                        3: _CTC100_AIO(self, 3),
                        4: _CTC100_AIO(self, 4)}
+
+    def raw_read(self):
+        """Override to strip non-ascii chars"""
+        ans = super().raw_read()
+        return ans.replace('\u03A9', 'ohm')
 
     @property
     def output_enable(self):
@@ -250,23 +258,22 @@ class CTC100(Instrument):
             s = "on"
         else:
             s = "off"
-        self.raw_write(f'"outputEnable {s}"')
+        self.raw_write(f'outputEnable {s}')
 
     @property
     def all_vals(self):
-        resp = self.raw_query('"getOutput?"')
+        resp = self.raw_query('getOutput?')
         return np.genfromtxt(resp.split(','))
 
     @property
     def all_val_names(self):
-        resp = self.raw_query('"getOutput.names?"')
+        resp = self.raw_query('getOutput.names?')
         resp_list = [r.strip() for r in resp.split(',')]
         return resp_list
 
     @property
     def all_val_units(self):
-        resp = self.raw_query('"getOutput.units?"')
+        resp = self.raw_query('getOutput.units?')
         resp_list = [r.strip() for r in resp.split(',')]
         resp_list = ['-' if unit == '' else unit for unit in resp_list]
-        resp_list = ['ohm' if unit == 'ê' else unit for unit in resp_list]
         return resp_list
