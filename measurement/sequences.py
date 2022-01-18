@@ -44,6 +44,7 @@ class Sequence(threading.Thread):
         self._is_paused = False
         self._resume_requested = False
         self._stop_requested = False
+        self._skip_requested = False
         if name is None:
             name = "Sequence"
         super().__init__(target=target, name=name, args=args, kwargs=kwargs)
@@ -54,7 +55,9 @@ class Sequence(threading.Thread):
             super().run()
             _logger.info(f"Sequence '{self.name}' completed")
         except SequenceStopError:
-            _logger.info(f"Sequence '{self.name}' stopping early")
+            _logger.warning(f"Sequence '{self.name}' stopping early")
+        except Exception:
+            _logger.critical("Unhandled Exception, Sequence terminated", exc_info=True)
 
     def _check_pause(self):
         """Call from target code when convienient to pause etc. Used in waits"""
@@ -103,6 +106,10 @@ class Sequence(threading.Thread):
         """Stop the sequence at the next opportunity. Blocks unitil then"""
         self._stop_requested = True
         self.join()
+
+    def skip_wait(self):
+        """The current or next wait will end immediately. Use with care."""
+        self._skip_requested = True
 
     def currently_executing(self):
         """Get a traceback of the line currently being executed"""

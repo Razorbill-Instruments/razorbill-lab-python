@@ -10,6 +10,7 @@ can be paused or aborted during one of these `Wait`s.
 """
 
 import time
+from datetime import datetime
 import numpy
 from . import _logger as _measlogger
 import threading
@@ -28,22 +29,31 @@ class _Wait():
         self.period = period
         self.timeout = timeout
         self.sequence = None
+        self._done = False
         if isinstance(threading.current_thread(), Sequence):
             self.sequence = threading.current_thread()
 
     def run(self):
-        done = False
         paused = False
         has_timed_out = False
-        while ((not done) or paused) and not has_timed_out:
+        skip = False
+        while paused or not any([self._done, has_timed_out, skip]):
             time.sleep(self.period)
             if self.sequence is not None:
                 self.sequence._check_stop()
                 paused = self.sequence._check_pause()
-            done = self.test()
+                if self.sequence._skip_requested:
+                    skip = True
+                    self.sequence._skip_requested = False
+                    _logger.warning(f'{self} is ending early due to external override')
+            self._done = self.test()
             if (time.time() - self.start_time) > self.timeout:
-                _logger.warning("Wait timed out")
+                _logger.warning(f"{self} is ending due to timeout")
                 has_timed_out = True
+
+    def __str__(self):
+        start = datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S')
+        return f"wait.{self.__class__.__name__} started at {start}"
 
 
 class In_Band(_Wait):
@@ -110,7 +120,7 @@ class Is_Equal(_Wait):
         Blocks until `quantity` is equal to target for `target_time`
 
         This is used to delay an experiment until some measurement quantity
-        is a certain value. For example, for a state flag to change.  For 
+        is a certain value. For example, for a state flag to change.  For
         continuous variables use In_Band instead.
 
         Construction
