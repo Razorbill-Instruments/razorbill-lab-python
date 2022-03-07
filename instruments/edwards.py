@@ -297,5 +297,6 @@ class nAIM_P():
         voltage = self.quantity.value
         if (-0.1 < voltage < 2): return 1000
         if (10 < voltage): return 1000
+        if (np.isnan(voltage)): return 1000
         pressure = float(self.interpolator(voltage))
         return pressure
