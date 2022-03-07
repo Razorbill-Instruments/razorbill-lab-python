@@ -35,5 +35,5 @@ class DC_7227xx(Instrument):
     current_actual = property(_make_float_getter('IOUT1?'))
     voltage_actual = property(_make_float_getter('VOUT1?'))
     output_enable = property(None, _make_bool_setter('OUT'))
-    OCP_enable = property(None, _make_bool_setter('OCP'))
+    ocp_enable = property(None, _make_bool_setter('OCP'))
     keyboard_lock = property(None, _make_bool_setter('LOCK'))
