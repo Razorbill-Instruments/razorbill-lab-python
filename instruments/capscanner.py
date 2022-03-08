@@ -111,7 +111,7 @@ class CapScanner:
 
     def __del__(self):
         try:
-        self._release_locks()
+            self._release_locks()
         except Exception:
             pass
 

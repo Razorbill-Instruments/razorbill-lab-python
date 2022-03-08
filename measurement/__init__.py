@@ -33,7 +33,7 @@ def setup_environment(log_path=log_path):
 
 
 class Quantity():
-        """
+    """
     A measurement quantity which is being measured or controlled.
 
     Each Quantity is a measurable variable such as time, temperature, voltage
